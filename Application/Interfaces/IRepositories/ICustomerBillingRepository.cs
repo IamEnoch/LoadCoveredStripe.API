@@ -1,6 +1,7 @@
 using System;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
+using LoadCoveredStripe.API.Domain.Entities;
 using LoadCoveredStripe.API.Domain.Enums;
 using LoadCoveredStripe.API.Models;
 

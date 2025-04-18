@@ -4,7 +4,6 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using LoadCoveredStripe.API.Application.Interfaces.IRepositories;
-using LoadCoveredStripe.API.Data.AppDbContext;
 using Microsoft.EntityFrameworkCore;
 
 namespace LoadCoveredStripe.API.Infrastructure.Data

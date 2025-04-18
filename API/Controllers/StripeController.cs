@@ -1,7 +1,8 @@
 using LoadCoveredStripe.API.API.Utilities;
 using LoadCoveredStripe.API.Application.DTOs;
-using LoadCoveredStripe.API.Data.AppDbContext;
-using LoadCoveredStripe.API.Infrastructure.Services;
+using LoadCoveredStripe.API.Application.Interfaces.IServices;
+using LoadCoveredStripe.API.Infrastructure.Data;
+using LoadCoveredStripe.API.Infrastructure.Interfaces;
 using LoadCoveredStripe.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +20,7 @@ namespace LoadCoveredStripe.API.API.Controllers;
 /// </param>
 [ApiController]
 [Route("api/[controller]")]
-public class StripeController(StripeService stripeService, AppDbContext context) : ControllerBase
+public class StripeController(IStripeService stripeService, ICustomerService customerService, AppDbContext context) : ControllerBase
 {
     /// <summary>
     ///     Get all active plans from the price catalog.
@@ -50,6 +51,14 @@ public class StripeController(StripeService stripeService, AppDbContext context)
     [HttpPost("create-setup-intent")]
     public async Task<ActionResult<(string clientSecret, string ephemeralKey)>> CreateSetupIntent([FromBody] CreateSetupIntentRequest request)
     {
+        // Validate customer ID
+        var customerExists = await customerService.CustomerExistsAsync(request.CustomerId);
+        if (customerExists.IsSuccess == false)
+        {
+            // Return an object getting the status code fomr the ServiceResult
+            return StatusCode((int)customerExists.StatusCode, customerExists);
+        }
+        
         // Ensure customer exists in Stripe
         var stripeCustomerId = await stripeService.EnsureStripeCustomerExistsAsync(request.CustomerId);
             

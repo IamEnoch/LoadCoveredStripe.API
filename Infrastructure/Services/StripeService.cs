@@ -2,6 +2,7 @@ using System.Net;
 using LoadCoveredStripe.API.API.Utilities;
 using LoadCoveredStripe.API.Application.Enums;
 using LoadCoveredStripe.API.Application.Interfaces.IRepositories;
+using LoadCoveredStripe.API.Domain.Entities;
 using LoadCoveredStripe.API.Infrastructure.Interfaces;
 using LoadCoveredStripe.API.Models;
 using Microsoft.Extensions.Options;
@@ -59,8 +60,7 @@ public class StripeService(
         {
             return ServiceResult<(string clientSecret, string ephemeralKey)>.Fail(
                 $"Error creating setup intent: {ex.Message}", 
-                default, 
-                ServiceError.Other);
+                default);
         }
     }
 
@@ -187,9 +187,9 @@ public class StripeService(
     {
         try
         {
-            var subscription = await _subscriptionService.GetAsync(subscriptionId);
-            
-            if (subscription == null)
+            // Check if the subscription exists in our database.
+            var subExists = await customerBillingRepository.ExistsAsync(b => b.StripeSubscriptionId == subscriptionId);
+            if (!subExists)
             {
                 return ServiceResult<bool>.Fail(
                     $"Subscription with ID {subscriptionId} not found", 
@@ -197,6 +197,30 @@ public class StripeService(
                     ServiceError.NotFound);
             }
             
+            // Check if the new price id is a valid on from our database. If not try syncing the db then check again
+            var priceExists = await priceCatalogRepository.ExistsByPriceIdAsync(newPriceId);
+            if (!priceExists)
+            {
+                var syncResult = await SyncPricesAsync();
+                if (!syncResult.IsSuccess)
+                {
+                    return ServiceResult<bool>.Fail(
+                        "Failed to sync prices from Stripe. Please try again later.",
+                        false,
+                        ServiceError.Other);
+                }
+                
+                priceExists = await priceCatalogRepository.ExistsByPriceIdAsync(newPriceId);
+                if (!priceExists)
+                {
+                    return ServiceResult<bool>.Fail(
+                        "New price not found in our database. Please check the price ID.",
+                        false,
+                        ServiceError.NotFound);
+                }
+            }
+            
+            var subscription = await _subscriptionService.GetAsync(subscriptionId);
             var subscriptionItemId = subscription.Items.Data[0].Id;
             
             var options = new SubscriptionItemUpdateOptions
@@ -396,12 +420,13 @@ public class StripeService(
             var options = new PriceListOptions
             {
                 Active = true,
-                Expand = new List<string> { "data.product" }
+                Expand = ["data.product"]
             };
             
             var prices = await _priceService.ListAsync(options);
             var existingPrices = await priceCatalogRepository.GetAllAsync();
-            var existingPricesDict = existingPrices.ToDictionary(p => p.PriceId);
+            var priceCatalogs = existingPrices.ToList();
+            var existingPricesDict = priceCatalogs.ToDictionary(p => p.PriceId);
             
             var updatedPrices = new List<PriceCatalog>();
             var newPrices = new List<PriceCatalog>();
@@ -449,7 +474,7 @@ public class StripeService(
             }
             
             // Find prices that exist in the local database but not in Stripe
-            foreach (var existingPrice in existingPrices)
+            foreach (var existingPrice in priceCatalogs)
             {
                 if (!stripePriceIds.Contains(existingPrice.PriceId))
                 {
@@ -629,17 +654,18 @@ public class StripeService(
     {
         try
         {
-            // Check if the customer already exists in our database
-            var customerExists = await customerRepository.CustomerExistsAsync(customerId);
-            if (!customerExists)
-                return null;
-            
-            var billing = await customerBillingRepository.GetByCustomerIdAsync(customerId);
-            
-            // If we already have a Stripe customer ID, return it
-            if (!string.IsNullOrEmpty(billing.StripeCustomerId))
+            // Check if a billing exists using the customer id
+            var billingExists = await customerBillingRepository.ExistsAsync(b => b.CustomerId == customerId);
+            if (billingExists)
             {
-                return billing.StripeCustomerId;
+                // If billing exists, get the existing billing record
+                var billing = await customerBillingRepository.GetByCustomerIdAsync(customerId);
+                
+                // If we already have a Stripe customer ID, return it
+                if (!string.IsNullOrEmpty(billing.StripeCustomerId))
+                {
+                    return billing.StripeCustomerId;
+                }
             }
             
             // Otherwise, fetch customer details and create a Stripe customer
@@ -665,12 +691,18 @@ public class StripeService(
             };
             
             var stripeCustomer = await _customerService.CreateAsync(customerOptions);
+            if (stripeCustomer == null)
+                return null;
             
-            // Create or update the CustomerBilling record
-            billing.StripeCustomerId = stripeCustomer.Id;
-            billing.UpdatedAt = DateTime.UtcNow;
-            await customerBillingRepository.UpdateAsync(billing);
-
+            // Create a customer billing record
+            var newBilling = new CustomerBilling
+            {
+                CustomerId = customerId,
+                StripeCustomerId = stripeCustomer.Id,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            await customerBillingRepository.AddAsync(newBilling);
             await customerBillingRepository.SaveChangesAsync();
             
             return stripeCustomer.Id;

@@ -2,7 +2,7 @@ using System;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using LoadCoveredStripe.API.Application.Interfaces.IRepositories;
-using LoadCoveredStripe.API.Data.AppDbContext;
+using LoadCoveredStripe.API.Domain.Entities;
 using LoadCoveredStripe.API.Domain.Enums;
 using LoadCoveredStripe.API.Models;
 using Microsoft.EntityFrameworkCore;
@@ -51,23 +51,15 @@ namespace LoadCoveredStripe.API.Infrastructure.Data
         {
             // Check if a billing record already exists for this customer
             var existingBilling = await GetByCustomerIdAsync(customerId);
-            if (existingBilling != null)
-            {
-                // Update existing record with new subscription information
-                existingBilling.PriceId = priceId;
-                existingBilling.Status = SubscriptionStatus.Active.ToString(); // Set as active by default
-                existingBilling.UpdatedAt = DateTime.UtcNow;
+            // Update existing record with new subscription information
+            existingBilling.PriceId = priceId;
+            existingBilling.Status = SubscriptionStatus.Active.ToString(); // Set as active by default
+            existingBilling.UpdatedAt = DateTime.UtcNow;
                 
-                await UpdateAsync(existingBilling);
-                await SaveChangesAsync();
+            await UpdateAsync(existingBilling);
+            await SaveChangesAsync();
                 
-                return existingBilling;
-            }
-            
-            // If no existing billing record exists, we can't create a subscription without a Stripe customer ID
-            // Creating a new Stripe customer should be handled at the service layer
-            throw new InvalidOperationException(
-                $"No customer billing record exists for customer ID {customerId}. Create a Stripe Customer first.");
+            return existingBilling;
         }
 
         /// <inheritdoc/>
@@ -75,19 +67,16 @@ namespace LoadCoveredStripe.API.Infrastructure.Data
         {
             var billing = await _dbSet.FirstOrDefaultAsync(predicate);
 
-            if (billing != null)
-            {
-                // Apply the updates using the action
-                updateAction(billing);
+            if (billing == null) return false;
+            // Apply the updates using the action
+            updateAction(billing);
 
-                // Always update the timestamp
-                billing.UpdatedAt = DateTime.UtcNow;
+            // Always update the timestamp
+            billing.UpdatedAt = DateTime.UtcNow;
 
-                await SaveChangesAsync();
-                return true;
-            }
+            await SaveChangesAsync();
+            return true;
 
-            return false;
         }
           
         /// <inheritdoc/>
@@ -100,18 +89,11 @@ namespace LoadCoveredStripe.API.Infrastructure.Data
         public async Task UpdateCustomerStripeIdAsync(int customerId, string stripeCustomerId)
         {
             var billing = await GetByCustomerIdAsync(customerId);
-            if (billing != null)
-            {
-                billing.StripeCustomerId = stripeCustomerId;
-                billing.UpdatedAt = DateTime.UtcNow;
+            billing.StripeCustomerId = stripeCustomerId;
+            billing.UpdatedAt = DateTime.UtcNow;
 
-                await UpdateAsync(billing);
-                await SaveChangesAsync();
-            }
-            else
-            {
-                throw new InvalidOperationException($"No customer billing record exists for customer ID {customerId}.");
-            }
+            await UpdateAsync(billing);
+            await SaveChangesAsync();
         }
     }
 }

@@ -1,28 +1,33 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using LoadCoveredStripe.API.Domain.Entities;
 using LoadCoveredStripe.API.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace LoadCoveredStripe.API.Data.AppDbContext;
+namespace LoadCoveredStripe.API.Infrastructure.Data;
 
-public partial class AppDbContext : DbContext
+/// <summary>
+/// Database context class for the LoadCovered Stripe API application.
+/// Provides access to entity collections and manages database interactions.
+/// </summary>
+public partial class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public AppDbContext()
-    {
-    }
 
-    public AppDbContext(DbContextOptions<AppDbContext> options)
-        : base(options)
-    {
-    }
-
+    /// <summary>
+    /// Gets or sets the collection of customer entities.
+    /// </summary>
     public virtual DbSet<Customer> Customers { get; set; }
+    
+    /// <summary>
+    /// Gets or sets the collection of customer billing entities.
+    /// </summary>
     public virtual DbSet<CustomerBilling> CustomerBillings { get; set; }
+    
+    /// <summary>
+    /// Gets or sets the collection of price catalog entities.
+    /// </summary>
     public virtual DbSet<PriceCatalog> PriceCatalogs { get; set; }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseMySQL("server=localhost;port=3306;database=loadcovered;uid=root;pwd=Data@123456");    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    /// <inheritdoc />
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Customer configuration
         modelBuilder.Entity<Customer>(entity =>

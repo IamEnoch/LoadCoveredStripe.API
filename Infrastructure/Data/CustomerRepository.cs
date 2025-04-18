@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using LoadCoveredStripe.API.Application.Interfaces.IRepositories;
-using LoadCoveredStripe.API.Data.AppDbContext;
 using LoadCoveredStripe.API.Models;
 using Microsoft.EntityFrameworkCore;
 

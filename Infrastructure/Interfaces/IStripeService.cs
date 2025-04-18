@@ -54,9 +54,15 @@ public interface IStripeService
     /// </summary>
     /// <returns>A service result indicating success or failure of the sync operation</returns>
     Task<ServiceResult<bool>> SyncPricesAsync();
-    
-    /// <summary>
+      /// <summary>
     /// Handles webhook events from Stripe
     /// </summary>
     Task<ServiceResult<bool>> HandleWebhookAsync(string rawJson, string signatureHeader);
+    
+    /// <summary>
+    /// Ensures a customer exists in Stripe and returns their Stripe customer ID
+    /// </summary>
+    /// <param name="customerId">The internal customer ID</param>
+    /// <returns>The Stripe customer ID if found or created, null otherwise</returns>
+    Task<string?> EnsureStripeCustomerExistsAsync(int customerId);
 }
